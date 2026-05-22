@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lingua — N-gram Language Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,400;1,9..144,500;1,9..144,600;1,9..144,700;1,9..144,800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FBF6EC;
+  --bg-2: #F4ECDC;
+  --paper: #FFFFFF;
+  --ink: #1A1410;
+  --ink-soft: #4A3F35;
+  --muted: #8A7F73;
+  --line: #E5DBC6;
+  --line-soft: #EFE7D4;
+  --accent: #E54B2A;
+  --accent-soft: #FCE5DE;
+  --accent-deep: #B83A1F;
+  --pos: #1F7A4A;
+  --pos-soft: #DDEFE3;
+  --neg: #B91C1C;
+  --neg-soft: #F5DCDB;
+  --info: #2E5C8A;
+  --info-soft: #DCE7F2;
+  --display: 'Fraunces', Georgia, serif;
+  --sans: 'Manrope', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+::selection { background: var(--accent); color: white; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.6;
+  font-size: 16px;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(at 90% 10%, rgba(229, 75, 42, 0.07) 0px, transparent 50%),
+    radial-gradient(at 10% 90%, rgba(31, 122, 74, 0.04) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 250 250' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 4rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* ============ HEADER ============ */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 4rem;
+}
+
+.brand { display: flex; align-items: baseline; gap: 0.5rem; }
+
+.brand-mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 2.4rem;
+  font-style: italic;
+  color: var(--accent);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+}
+
+.brand-text {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.header-meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.14em;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.meta-dot {
+  width: 5px; height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+@media (max-width: 720px) { .header-meta { display: none; } }
+
+/* ============ HERO ============ */
+.hero {
+  padding: 0 0 4rem;
+  max-width: 880px;
+  position: relative;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 1.75rem;
+  font-weight: 600;
+}
+
+.hero-tag::before {
+  content: '';
+  width: 28px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.hero-title {
+  font-family: var(--display);
+  font-size: clamp(3rem, 9vw, 6.5rem);
+  font-weight: 600;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  margin-bottom: 1.75rem;
+  color: var(--ink);
+}
+
+.hero-title em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.hero-subtitle {
+  font-size: 1.2rem;
+  color: var(--ink-soft);
+  max-width: 640px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.hero-deco {
+  position: absolute;
+  top: -20px;
+  right: 20px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.1;
+  z-index: -1;
+  filter: blur(40px);
+}
+
+@media (max-width: 900px) {
+  .hero-deco { display: none; }
+}
+
+/* ============ TABS ============ */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 3rem;
+  border-bottom: 2px solid var(--ink);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 1rem 1.75rem 1.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  border-bottom: 4px solid transparent;
+  transition: all 0.2s ease;
+  margin-bottom: -3px;
+  white-space: nowrap;
+  position: relative;
+}
+
+.tab:hover { color: var(--ink); }
+
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.tab-num {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tab.active .tab-num { font-weight: 700; }
+
+/* ============ PANELS ============ */
+.panel { display: none; animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.panel.active { display: block; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-intro {
+  font-family: var(--display);
+  font-size: 1.8rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink);
+  max-width: 720px;
+  margin-bottom: 3rem;
+  letter-spacing: -0.02em;
+}
+
+.panel-intro em {
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ============ INPUT CARD ============ */
+.input-card {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  position: relative;
+  box-shadow: 6px 6px 0 var(--ink);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input-card:focus-within {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 var(--accent);
+}
+
+.input-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 0.7rem;
+  font-weight: 600;
+}
+
+.text-input, .text-area {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 1.6rem;
+  font-weight: 500;
+  outline: none;
+  resize: none;
+  line-height: 1.4;
+}
+
+.text-input::placeholder, .text-area::placeholder {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.text-area { min-height: 5rem; }
+
+.input-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 1.5rem -2rem;
+}
+
+.secondary-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  outline: none;
+  font-weight: 500;
+}
+.secondary-input::placeholder { color: var(--muted); font-weight: 400; }
+
+/* ============ BUTTON ============ */
+.btn {
+  background: var(--accent);
+  color: white;
+  border: 2px solid var(--ink);
+  padding: 0.9rem 2rem;
+  border-radius: 0;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 4px 4px 0 var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+.btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 4px 4px 0 var(--ink); }
+
+/* ============ EXAMPLES ============ */
+.examples { margin-bottom: 2.5rem; }
+
+.examples-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 1rem;
+  display: block;
+  font-weight: 600;
+}
+
+.example-chips { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.chip {
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  padding: 0.55rem 1rem;
+  border-radius: 0;
+  font-size: 0.85rem;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.chip:hover {
+  background: var(--accent);
+  color: white;
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* ============ RESULTS ============ */
+.results-section { min-height: 200px; }
+
+.empty-state {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: var(--muted);
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 1.3rem;
+  border: 2px dashed var(--line);
+}
+
+/* AUTO-COMPLETE */
+.ac-meta {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+}
+
+.ac-meta strong {
+  color: var(--ink);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+}
+
+.ac-meta code {
+  background: white;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0;
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.ac-rows { display: flex; flex-direction: column; gap: 0; }
+
+.ac-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 130px;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.4rem 1.5rem;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  margin-bottom: -2px;
+  transition: all 0.2s ease;
+  animation: slideIn 0.35s ease forwards;
+  opacity: 0;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.ac-row:hover {
+  background: var(--accent-soft);
+  position: relative;
+  z-index: 1;
+}
+
+.ac-order {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ac-order::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+.ac-word {
+  font-family: var(--display);
+  font-size: 1.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.ac-word.no-match { color: var(--muted); font-style: italic; font-weight: 400; font-size: 1.2rem; }
+
+.ac-prob-wrap { text-align: right; }
+
+.ac-prob {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ac-prob-bar {
+  height: 4px;
+  background: var(--line);
+  margin-top: 0.4rem;
+  overflow: hidden;
+}
+
+.ac-prob-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* SENTIMENT */
+.sentiment-card {
+  text-align: center;
+  padding: 3.5rem 2rem;
+  border: 3px solid var(--ink);
+  margin-bottom: 2rem;
+  position: relative;
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+.sentiment-card.pos { background: var(--pos-soft); }
+.sentiment-card.neg { background: var(--neg-soft); }
+
+.sentiment-emoji {
+  font-size: 4.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+  display: inline-block;
+  transform: rotate(-4deg);
+}
+
+.sentiment-card.neg .sentiment-emoji { transform: rotate(4deg); }
+
+.sentiment-label {
+  font-family: var(--display);
+  font-size: 4.5rem;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  margin-bottom: 0.75rem;
+}
+
+.sentiment-card.pos .sentiment-label { color: var(--pos); }
+.sentiment-card.neg .sentiment-label { color: var(--neg); }
+
+.sentiment-confidence {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.decision-source {
+  background: var(--info-soft);
+  border: 2px solid var(--info);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.decision-source strong { color: var(--info); font-weight: 700; }
+
+.decision-source.warning {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.decision-source.warning strong { color: var(--accent-deep); }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0;
+}
+
+.metric {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 1rem 1.25rem;
+  margin-right: -2px;
+  margin-bottom: -2px;
+}
+
+.metric-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.metric-value {
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* PERPLEXITY */
+.pp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 720px) { .pp-grid { grid-template-columns: 1fr; } }
+
+.pp-input-card {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 1.5rem;
+  margin-right: -2px;
+}
+
+.pp-input-card:last-child { margin-right: 0; }
+
+.pp-input-card input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 1.2rem;
+  font-weight: 500;
+  outline: none;
+  margin-top: 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.pp-winner {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: var(--accent);
+  border: 3px solid var(--ink);
+  margin-bottom: 1.5rem;
+  color: white;
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+.pp-winner-label {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 0.9rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.pp-winner-text {
+  font-family: var(--display);
+  font-size: 2rem;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.pp-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+
+@media (max-width: 720px) { .pp-comparison { grid-template-columns: 1fr; } }
+
+.pp-result {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 1.75rem;
+  margin-right: -2px;
+}
+
+.pp-result:last-child { margin-right: 0; }
+
+.pp-result.winner {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  border-width: 3px;
+}
+
+.pp-result-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+
+.pp-result-text {
+  font-family: var(--display);
+  font-size: 1.15rem;
+  color: var(--ink);
+  margin-bottom: 1.25rem;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.pp-result-value {
+  font-family: var(--display);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: -0.03em;
+}
+
+.pp-result.winner .pp-result-value { color: var(--accent); }
+
+/* ABOUT */
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+}
+
+.about-card {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 1.75rem;
+  margin-right: -2px;
+  margin-bottom: -2px;
+  position: relative;
+}
+
+.about-card h3 {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.about-card ul { list-style: none; padding: 0; }
+
+.about-card li {
+  padding: 0.65rem 0;
+  border-bottom: 1px dashed var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.about-card li:last-child { border-bottom: none; }
+
+.about-card li strong {
+  color: var(--ink);
+  font-weight: 700;
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+/* FOOTER */
+.footer {
+  margin-top: 6rem;
+  padding-top: 2rem;
+  border-top: 2px solid var(--ink);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+@media (max-width: 720px) {
+  .footer { flex-direction: column; gap: 0.5rem; }
+  .app { padding: 1.5rem 1rem 3rem; }
+  .ac-row { grid-template-columns: 80px 1fr 100px; gap: 1rem; padding: 1.1rem; }
+  .ac-word { font-size: 1.4rem; }
+  .sentiment-label { font-size: 3rem; }
+  .panel-intro { font-size: 1.3rem; }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid white;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<main class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <span class="brand-mark">L*</span>
+      <span class="brand-text">Lingua</span>
+    </div>
+    <div class="header-meta">
+      <span>NLP PROJECT</span>
+      <span class="meta-dot"></span>
+      <span>AIR UNIVERSITY</span>
+      <span class="meta-dot"></span>
+      <span>MAY 2026</span>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-deco"></div>
+    <span class="hero-tag">N-gram language model</span>
+    <h1 class="hero-title">Words that <em>predict</em> words.</h1>
+    <p class="hero-subtitle">An auto-complete engine, hybrid sentiment classifier, and perplexity sandbox &mdash; all powered by n-gram language models trained on ten thousand tweets, with k=1 Laplace smoothing and negation-aware classification.</p>
+  </section>
+
+  <!-- TABS -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="autocomplete">
+      <span class="tab-num">01</span>
+      <span>Auto-Complete</span>
+    </button>
+    <button class="tab" data-tab="sentiment">
+      <span class="tab-num">02</span>
+      <span>Sentiment</span>
+    </button>
+    <button class="tab" data-tab="perplexity">
+      <span class="tab-num">03</span>
+      <span>Perplexity</span>
+    </button>
+    <button class="tab" data-tab="about">
+      <span class="tab-num">04</span>
+      <span>About</span>
+    </button>
+  </nav>
+
+  <!-- TAB 1: AUTO-COMPLETE -->
+  <section class="panel active" id="autocomplete">
+    <p class="panel-intro">Five n-gram models predict the next word <em>simultaneously</em>. Lower orders are general; higher orders are context-specific. Watch the predictions update as you type.</p>
+
+    <div class="input-card">
+      <label class="input-label">Phrase</label>
+      <input type="text" class="text-input" id="ac-input" placeholder="i love..." autocomplete="off">
+      <div class="input-divider"></div>
+      <label class="input-label">Optional prefix filter</label>
+      <input type="text" class="secondary-input" id="ac-prefix" placeholder="e.g., 'g' shows only words starting with g" autocomplete="off">
+    </div>
+
+    <div class="examples">
+      <span class="examples-label">Quick examples</span>
+      <div class="example-chips">
+        <button class="chip" data-text="i love " data-prefix="">i love</button>
+        <button class="chip" data-text="thanks for the " data-prefix="">thanks for the</button>
+        <button class="chip" data-text="good morning " data-prefix="">good morning</button>
+        <button class="chip" data-text="happy " data-prefix="">happy</button>
+        <button class="chip" data-text="i want to " data-prefix="g">i want to + 'g'</button>
+        <button class="chip" data-text="i lov" data-prefix="">i lov (mid-word)</button>
+      </div>
+    </div>
+
+    <div class="results-section" id="ac-results">
+      <div class="empty-state">Type a phrase to see suggestions.</div>
+    </div>
+  </section>
+
+  <!-- TAB 2: SENTIMENT -->
+  <section class="panel" id="sentiment">
+    <p class="panel-intro">Hybrid classifier: per-class bigram models with <em>negation marking</em> (Pang &amp; Lee 2002) and a lexicon override for out-of-domain inputs.</p>
+
+    <div class="input-card">
+      <label class="input-label">Sentence</label>
+      <textarea class="text-area" id="sent-input" placeholder="I love this project..." autocomplete="off"></textarea>
+    </div>
+
+    <div class="examples">
+      <span class="examples-label">Try these &mdash; covers all decision paths</span>
+      <div class="example-chips">
+        <button class="chip" data-sent="i love this so much thanks">i love this so much thanks</button>
+        <button class="chip" data-sent="worst day ever i hate everything">worst day ever i hate everything</button>
+        <button class="chip" data-sent="this is not bad">this is not bad</button>
+        <button class="chip" data-sent="i do not hate him">i do not hate him</button>
+        <button class="chip" data-sent="he is intelligent">he is intelligent</button>
+        <button class="chip" data-sent="he passed the exam with good marks">he passed the exam with good marks</button>
+        <button class="chip" data-sent="oh great another monday">oh great another monday (sarcasm)</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 2rem;">
+      <button class="btn" id="sent-btn">Analyze sentiment</button>
+    </div>
+
+    <div class="results-section" id="sent-results">
+      <div class="empty-state">Enter a sentence and click analyze.</div>
+    </div>
+  </section>
+
+  <!-- TAB 3: PERPLEXITY -->
+  <section class="panel" id="perplexity">
+    <p class="panel-intro">Compare how <em>natural</em> two sentences look to the model. Lower perplexity means the bigram model finds the sentence more typical of its training data.</p>
+
+    <div class="pp-grid">
+      <div class="pp-input-card">
+        <label class="input-label">Sentence 1</label>
+        <input type="text" id="pp-sent1" value="thanks for the follow" autocomplete="off">
+      </div>
+      <div class="pp-input-card">
+        <label class="input-label">Sentence 2</label>
+        <input type="text" id="pp-sent2" value="follow thanks the for" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="examples">
+      <span class="examples-label">Quick comparisons</span>
+      <div class="example-chips">
+        <button class="chip" data-s1="thanks for the follow" data-s2="follow thanks the for">Coherent vs scrambled</button>
+        <button class="chip" data-s1="good morning everyone" data-s2="everyone good morning">Natural vs odd order</button>
+        <button class="chip" data-s1="happy birthday to you" data-s2="you happy birthday to">Common phrase</button>
+        <button class="chip" data-s1="i love you" data-s2="you i love">Subject-verb-object</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 2rem;">
+      <button class="btn" id="pp-btn">Compare perplexity</button>
+    </div>
+
+    <div class="results-section" id="pp-results">
+      <div class="empty-state">Enter two sentences and click compare.</div>
+    </div>
+  </section>
+
+  <!-- TAB 4: ABOUT -->
+  <section class="panel" id="about">
+    <p class="panel-intro">A complete <em>n-gram pipeline</em> &mdash; from raw tweets to a working auto-complete and sentiment classifier, with no neural networks.</p>
+
+    <div class="about-grid">
+      <div class="about-card">
+        <h3>The Project</h3>
+        <ul>
+          <li><strong>Course</strong>SE454 Natural Language Processing</li>
+          <li><strong>Institution</strong>Air University, Islamabad</li>
+          <li><strong>Department</strong>Creative Technologies</li>
+          <li><strong>Submission</strong>17 May 2026</li>
+        </ul>
+      </div>
+
+      <div class="about-card">
+        <h3>The Model</h3>
+        <ul>
+          <li><strong>Dataset</strong>NLTK twitter_samples &mdash; 10,000 labeled tweets</li>
+          <li><strong>Vocabulary</strong>~4,400 words at threshold = 2</li>
+          <li><strong>Orders</strong>Unigrams through 6-grams</li>
+          <li><strong>Smoothing</strong>Add-1 (Laplace), k = 1</li>
+          <li><strong>Perplexity</strong>Computed in log-space</li>
+        </ul>
+      </div>
+
+      <div class="about-card">
+        <h3>Sentiment Hybrid</h3>
+        <ul>
+          <li><strong>Baseline</strong>Per-class bigram models, ~93% accuracy</li>
+          <li><strong>Negation</strong>Pang &amp; Lee 2002 scope marking</li>
+          <li><strong>Lexicon</strong>Hu &amp; Liu 2004 opinion lexicon</li>
+          <li><strong>Override</strong>OOD + low-confidence detection</li>
+        </ul>
+      </div>
+
+      <div class="about-card">
+        <h3>Stack</h3>
+        <ul>
+          <li><strong>Backend</strong>Python &middot; FastAPI &middot; NLTK</li>
+          <li><strong>Frontend</strong>HTML &middot; CSS &middot; vanilla JS</li>
+          <li><strong>Typography</strong>Fraunces &middot; Manrope &middot; JetBrains Mono</li>
+          <li><strong>Verification</strong>17 rubric functions, all passing</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div>Built with FastAPI &middot; Fraunces &middot; Manrope &middot; JetBrains Mono</div>
+    <div>Jawwad Hussain &middot; 2026</div>
+  </footer>
+
+</main>
+
+<script>
+const API = window.location.origin;
+
+async function api(endpoint, body) {
+  const resp = await fetch(`${API}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(`API error ${resp.status}`);
+  return resp.json();
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Auto-Complete
+const acInput  = document.getElementById('ac-input');
+const acPrefix = document.getElementById('ac-prefix');
+const acResults = document.getElementById('ac-results');
+
+let acDebounce;
+function scheduleAutocomplete() {
+  clearTimeout(acDebounce);
+  acDebounce = setTimeout(runAutocomplete, 150);
+}
+
+async function runAutocomplete() {
+  const text   = acInput.value;
+  const prefix = acPrefix.value;
+
+  if (!text.trim() && !prefix.trim()) {
+    acResults.innerHTML = '<div class="empty-state">Type a phrase to see suggestions.</div>';
+    return;
+  }
+
+  try {
+    const data = await api('/api/autocomplete', { text, prefix });
+    renderAutocomplete(data);
+  } catch (err) {
+    acResults.innerHTML = `<div class="empty-state" style="color:var(--neg);">Error: ${err.message}</div>`;
+  }
+}
+
+function renderAutocomplete(data) {
+  const { context_tokens, filter_prefix, suggestions } = data;
+
+  let html = `<div class="ac-meta">
+    <strong>Context</strong> <code>${JSON.stringify(context_tokens)}</code>`;
+  if (filter_prefix) {
+    html += ` &nbsp;&middot;&nbsp; <strong>Prefix</strong> <code>"${filter_prefix}"</code>`;
+  }
+  html += '</div>';
+
+  if (!suggestions.length) {
+    html += '<div class="empty-state">No suggestions.</div>';
+    acResults.innerHTML = html;
+    return;
+  }
+
+  const maxProb = Math.max(...suggestions.map(s => s.probability));
+
+  html += '<div class="ac-rows">';
+  suggestions.forEach((s, idx) => {
+    const pct = maxProb > 0 ? (s.probability / maxProb * 100) : 0;
+    const wordDisplay = s.word ? s.word : '(no match)';
+    const wordClass = s.word ? 'ac-word' : 'ac-word no-match';
+    html += `
+      <div class="ac-row" style="animation-delay:${idx * 60}ms;">
+        <div class="ac-order">${s.order}-gram</div>
+        <div class="${wordClass}">${escapeHtml(wordDisplay)}</div>
+        <div class="ac-prob-wrap">
+          <div class="ac-prob">${s.probability.toFixed(5)}</div>
+          <div class="ac-prob-bar"><div class="ac-prob-fill" style="width:${pct}%;"></div></div>
+        </div>
+      </div>`;
+  });
+  html += '</div>';
+
+  acResults.innerHTML = html;
+}
+
+acInput.addEventListener('input', scheduleAutocomplete);
+acPrefix.addEventListener('input', scheduleAutocomplete);
+
+document.querySelectorAll('#autocomplete .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    acInput.value  = chip.dataset.text;
+    acPrefix.value = chip.dataset.prefix || '';
+    runAutocomplete();
+  });
+});
+
+// Sentiment
+const sentInput = document.getElementById('sent-input');
+const sentBtn   = document.getElementById('sent-btn');
+const sentResults = document.getElementById('sent-results');
+
+async function runSentiment() {
+  const text = sentInput.value.trim();
+  if (!text) {
+    sentResults.innerHTML = '<div class="empty-state">Enter a sentence and click analyze.</div>';
+    return;
+  }
+
+  sentBtn.disabled = true;
+  sentBtn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const data = await api('/api/sentiment', { text });
+    renderSentiment(data);
+  } catch (err) {
+    sentResults.innerHTML = `<div class="empty-state" style="color:var(--neg);">Error: ${err.message}</div>`;
+  } finally {
+    sentBtn.disabled = false;
+    sentBtn.innerHTML = 'Analyze sentiment';
+  }
+}
+
+function renderSentiment(data) {
+  const { label, pp_pos, pp_neg, lex_score, source, margin } = data;
+  const isPos = label === 'pos';
+  const labelText = isPos ? 'Positive' : 'Negative';
+  const cardClass = isPos ? 'pos' : 'neg';
+
+  let explanation, explanationClass = '';
+  if (source.includes('negation')) {
+    explanation = '<strong>Lexicon override (negation)</strong> &mdash; the sentence contains a negation word, so the rule-based lexicon takes precedence over the bigram model.';
+    explanationClass = 'warning';
+  } else if (source.includes('out-of-domain')) {
+    explanation = '<strong>Lexicon override (out-of-domain)</strong> &mdash; the input is formal English or otherwise outside the tweet training distribution.';
+    explanationClass = 'warning';
+  } else if (source.includes('low confidence')) {
+    explanation = '<strong>Lexicon override (low confidence)</strong> &mdash; the bigram model was uncertain (margin under 20%), so the lexicon decided.';
+    explanationClass = 'warning';
+  } else {
+    explanation = '<strong>Decided by the bigram language model</strong> &mdash; no override conditions triggered.';
+  }
+
+  sentResults.innerHTML = `
+    <div class="sentiment-card ${cardClass}">
+      <div class="sentiment-emoji">${isPos ? '😊' : '😟'}</div>
+      <div class="sentiment-label">${labelText}</div>
+      <div class="sentiment-confidence">Confidence margin &middot; ${(margin * 100).toFixed(1)}%</div>
+    </div>
+
+    <div class="decision-source ${explanationClass}">${explanation}</div>
+
+    <div class="metrics-grid">
+      <div class="metric">
+        <span class="metric-label">Decision Source</span>
+        <span class="metric-value">${source}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">PP (POS model)</span>
+        <span class="metric-value">${pp_pos.toFixed(2)}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">PP (NEG model)</span>
+        <span class="metric-value">${pp_neg.toFixed(2)}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Lexicon Score</span>
+        <span class="metric-value">${lex_score > 0 ? '+' : ''}${lex_score}</span>
+      </div>
+    </div>
+  `;
+}
+
+sentBtn.addEventListener('click', runSentiment);
+sentInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runSentiment();
+});
+
+document.querySelectorAll('#sentiment .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    sentInput.value = chip.dataset.sent;
+    runSentiment();
+  });
+});
+
+// Perplexity
+const ppS1   = document.getElementById('pp-sent1');
+const ppS2   = document.getElementById('pp-sent2');
+const ppBtn  = document.getElementById('pp-btn');
+const ppResults = document.getElementById('pp-results');
+
+async function runPerplexity() {
+  const s1 = ppS1.value.trim();
+  const s2 = ppS2.value.trim();
+  if (!s1 || !s2) {
+    ppResults.innerHTML = '<div class="empty-state">Enter both sentences to compare.</div>';
+    return;
+  }
+
+  ppBtn.disabled = true;
+  ppBtn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const data = await api('/api/perplexity', { sentence1: s1, sentence2: s2 });
+    renderPerplexity(data);
+  } catch (err) {
+    ppResults.innerHTML = `<div class="empty-state" style="color:var(--neg);">Error: ${err.message}</div>`;
+  } finally {
+    ppBtn.disabled = false;
+    ppBtn.innerHTML = 'Compare perplexity';
+  }
+}
+
+function renderPerplexity(data) {
+  const { sentence1, sentence2, winner } = data;
+  const winnerText  = winner === 'sentence1' ? sentence1.text : sentence2.text;
+
+  ppResults.innerHTML = `
+    <div class="pp-winner">
+      <div class="pp-winner-label">Lower perplexity wins</div>
+      <div class="pp-winner-text">"${escapeHtml(winnerText)}"</div>
+    </div>
+    <div class="pp-comparison">
+      <div class="pp-result ${winner === 'sentence1' ? 'winner' : ''}">
+        <div class="pp-result-label">Sentence 1</div>
+        <div class="pp-result-text">${escapeHtml(sentence1.text)}</div>
+        <div class="pp-result-value">${sentence1.perplexity.toFixed(2)}</div>
+      </div>
+      <div class="pp-result ${winner === 'sentence2' ? 'winner' : ''}">
+        <div class="pp-result-label">Sentence 2</div>
+        <div class="pp-result-text">${escapeHtml(sentence2.text)}</div>
+        <div class="pp-result-value">${sentence2.perplexity.toFixed(2)}</div>
+      </div>
+    </div>
+  `;
+}
+
+ppBtn.addEventListener('click', runPerplexity);
+
+document.querySelectorAll('#perplexity .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    ppS1.value = chip.dataset.s1;
+    ppS2.value = chip.dataset.s2;
+    runPerplexity();
+  });
+});
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
