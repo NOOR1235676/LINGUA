@@ -98,4 +98,4 @@ That's it. Four tabs:
 
 ---
 
-Built by Jawwad Hussain · NLP Semester Project · Air University · May 2026
+Built by NOOR UL EMAN · NLP Semester Project · Air University · May 2026
